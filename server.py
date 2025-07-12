@@ -2,17 +2,17 @@ from mesa.visualization.modules import CanvasGrid
 from mesa.visualization.ModularVisualization import ModularServer
 from mesa.visualization.UserParam import Slider
 from model import PalmerasModel
-from agents import PalmeraAgent, DronAgent
-
+from agents.PalmAgent import PalmAgent
+from agents.DroneAgent import DroneAgent
 def agent_portrayal(agent):
     portrayal = {"Layer": 0, "w": 1, "h": 1}
     
-    if isinstance(agent, PalmeraAgent):
+    if isinstance(agent, PalmAgent):
         if agent.estado == "verde":
             portrayal["Shape"] = "images/palmera_verde.png"
         elif agent.estado == "infectada":
             portrayal["Shape"] = "images/palmera_cafe.png"
-    elif isinstance(agent, DronAgent):
+    elif isinstance(agent, DroneAgent):
         portrayal = {
             "Shape": "images/dron.png",
             "Layer": 1,

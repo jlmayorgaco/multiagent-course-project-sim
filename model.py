@@ -1,7 +1,8 @@
 from mesa import Model
 from mesa.space import MultiGrid
 from mesa.time import RandomActivation
-from agents import PalmeraAgent, DronAgent
+from agents.PalmAgent import PalmAgent
+from agents.DroneAgent import DroneAgent
 import random
 
 class PalmerasModel(Model):
@@ -21,7 +22,7 @@ class PalmerasModel(Model):
         for (contents, x, y) in self.grid.coord_iter():
             if random.random() < self.densidad:
                 estado_inicial = "infectada" if random.random() < 0.1 else "verde"
-                palmera = PalmeraAgent(self.next_id(), (x, y), self, estado_inicial)
+                palmera = PalmAgent(self.next_id(), (x, y), self, estado_inicial)
                 self.grid.place_agent(palmera, (x, y))
                 self.schedule.add(palmera)
 
@@ -29,9 +30,9 @@ class PalmerasModel(Model):
         for _ in range(self.n_drones):
             x = self.random.randrange(self.grid.width)
             y = self.random.randrange(self.grid.height)
-            dron = DronAgent(self.next_id(), (x, y), self)
-            self.grid.place_agent(dron, (x, y))
-            self.schedule.add(dron)
+            drone = DroneAgent(self.next_id(), (x, y), self)
+            self.grid.place_agent(drone, (x, y))
+            self.schedule.add(drone)
 
     def step(self):
         self.schedule.step()

@@ -1,23 +1,9 @@
 from mesa import Agent
+from .PalmAgent import PalmAgent
+
 import random
 
-class PalmeraAgent(Agent):
-    def __init__(self, unique_id, pos, model, estado="verde"):
-        super().__init__(unique_id, model)
-        self.pos = pos
-        self.estado = estado
-
-    def step(self):
-        if self.estado == "verde":
-            vecinos = self.model.grid.get_neighbors(self.pos, moore=True, include_center=False)
-            for vecino in vecinos:
-                if isinstance(vecino, PalmeraAgent) and vecino.estado == "infectada":
-                    if random.random() < self.model.tasa_propagacion:
-                        self.estado = "infectada"
-                        break
-
-
-class DronAgent(Agent):
+class DroneAgent(Agent):
     def __init__(self, unique_id, pos, model):
         super().__init__(unique_id, model)
         self.pos = pos
@@ -26,7 +12,7 @@ class DronAgent(Agent):
         # Intentar curar palmeras infectadas cercanas
         vecinos = self.model.grid.get_neighbors(self.pos, moore=True, include_center=False)
         for vecino in vecinos:
-            if isinstance(vecino, PalmeraAgent) and vecino.estado == "infectada":
+            if isinstance(vecino, PalmAgent) and vecino.estado == "infectada":
                 if random.random() < self.model.tasa_cura:
                     vecino.estado = "verde"
 
