@@ -27,27 +27,12 @@ from src.agents.DroneAgent import DroneAgent
 
 # Models
 from src.models.model import PalmerasModel
+
+
 # ---------------------------------------------------------------- #
 
-def agent_portrayal(agent):
-    portrayal = {"Layer": 0, "w": 1, "h": 1}
-    
-    if isinstance(agent, PalmAgent):
-        if agent.estado == "verde":
-            portrayal["Shape"] = "images/palm_green.png"
-        elif agent.estado == "infectada":
-            portrayal["Shape"] = "images/palm_brown.png"
-    elif isinstance(agent, DroneAgent):
-        portrayal = {
-            "Shape": "images/drone.png",
-            "Layer": 1,
-            "w": 1,
-            "h": 1,
-        }
-    
-    return portrayal
-
-
+# Grid Config
+from config import agent_portrayal
 grid = CanvasGrid(agent_portrayal, 20, 20, 600, 600)
 
 model_params = {
