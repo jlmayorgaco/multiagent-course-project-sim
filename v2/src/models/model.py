@@ -26,7 +26,7 @@ class PalmerasModel(Model):
 
         # Blackboard shared among agents
         self.blackboard = {
-            "palms_targets": [],       # List of {"location": (x, y), "confidence": 0.9}
+            "palms_targets": {},       # List of {"location": (x, y), "confidence": 0.9}
             "drones_positions": {}     # Dict of {drone_id: (x, y)}
         }
 
