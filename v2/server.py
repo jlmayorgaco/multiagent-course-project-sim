@@ -32,24 +32,28 @@ from src.models.model import PalmerasModel
 # ---------------------------------------------------------------- #
 
 # Grid Config
-from config import agent_portrayal
-grid = CanvasGrid(agent_portrayal, 20, 20, 600, 600)
+from src.visualization.AgentPortrayal import AgentPortrayal
+from src.visualization.BlackboardText import BlackboardText
+
+grid = CanvasGrid(AgentPortrayal, 10, 10, 600, 600)
+blackboard_text = BlackboardText()
+
 
 model_params = {
 
-    "width": 20,
-    "height": 20,
+    "width": 10,
+    "height": 10,
 
-    "densidad": Slider("Densidad de palmeras", 0.6, 0.1, 1.0, 0.1),
+    "densidad": Slider("Densidad de palmeras", 0.1, 0.1, 1.0, 0.1),
     "n_drones": Slider("Número de drones", 3, 1, 10, 1),
 
-    "tasa_propagacion": Slider("Tasa de propagación", 0.2, 0.0, 1.0, 0.05),
+    "tasa_propagacion": Slider("Tasa de propagación", 0.12, 0.0, 1.0, 0.05),
     "tasa_cura": Slider("Tasa de curación por drones", 1.0, 0.0, 1.0, 0.05),
 }
 
 server = ModularServer(
     PalmerasModel,
-    [grid],
+    [grid, blackboard_text],
     "Simulación de Palmeras y Drones",
     model_params
 )
