@@ -2,7 +2,7 @@ from mesa import Agent
 import random
 
 class PalmAgent(Agent):
-    def __init__(self, unique_id, pos, model, estado="verde"):
+    def __init__(self, unique_id, model, pos, estado="verde"):
         super().__init__(unique_id, model)
         self.pos = pos
         self.estado = estado
