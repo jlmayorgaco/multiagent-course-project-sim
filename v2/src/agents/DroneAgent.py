@@ -12,7 +12,7 @@ from .components.MedicineDispenser import MedicineDispenser
 from .components.CVModel import CVModel
 
 class DroneAgent(Agent):
-    def __init__(self, unique_id, pos, model):
+    def __init__(self, unique_id, model, pos):
         super().__init__(unique_id, model)
 
         self.pos = pos
@@ -64,23 +64,12 @@ class DroneAgent(Agent):
         self.detected_palms_in_photo = {}
 
     def do_sensing(self):
-
-        print(' ====> [0/4] Sensing position')
-        print(self.pos)
-
         self.photo = self.camera.take_photo(self.pos)
-        print(' ====> [1/4] Sensing taking photo')
-        print(self.photo)
-
         self.vision = self.cv_model.analyze(self.photo)
         self.battery_level = self.battery.get_level()
         self.medicine_level = self.medicine.get_level()
-        
         x0 , y0 = self.pos
         self.detected_palms_in_photo = self.cv_model.convert_infected_matrix_to_dict(self.vision, x0, y0)
-        print(' ====> [2/4] Sensing analizing photo')
-        print(self.detected_palms_in_photo)
-
 
     def do_control(self):
         position = self.gps.get_position()
@@ -93,12 +82,10 @@ class DroneAgent(Agent):
 
         # --- State: Exploring ---
         if self.state == "exploring":
-            print('\n# --- State: Exploring ---')
-            print('Detected palms in photo:', self.detected_palms_in_photo)
-
+      
             # Case 1: Current position is infected → cure here
             if pos_str in self.detected_palms_in_photo:
-                print(f"[{self.unique_id}] Detected infected palm at current position {pos_str}. Switching to curing.")
+                #print(f"[{self.unique_id}] Detected infected palm at current position {pos_str}. Switching to curing.")
                 self.target = position
                 self.state = "curing"
                 self.next_move = self.last_pos if hasattr(self, 'last_pos') else None
@@ -108,7 +95,6 @@ class DroneAgent(Agent):
                 # Convert string keys to tuple for distance calculation
                 detected_tuples = list(self.detected_palms_in_photo.keys())
                 closest = min(detected_tuples, key=lambda p: self.controller.manhattan_distance(position, p))
-                print(f"[{self.unique_id}] Moving to new infected palm at {closest}")
                 self.target = closest
                 self.state = "moving_to_target"
                 self.next_move = self.controller.move_towards(position, self.target, self.known_drones)
@@ -121,7 +107,6 @@ class DroneAgent(Agent):
 
             # Case 4: Explore
             else:
-                print(f"[{self.unique_id}] No targets, exploring...")
                 self.next_move = self.controller.explore(position, self.known_drones)
 
         # --- State: Curing ---
