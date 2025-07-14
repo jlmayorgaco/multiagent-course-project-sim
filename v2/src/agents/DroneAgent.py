@@ -10,6 +10,8 @@ from .components.Camera import Camera
 from .components.Controller import Controller
 from .components.MedicineDispenser import MedicineDispenser
 from .components.CVModel import CVModel
+from .components.Rotors import Rotors
+
 
 class DroneAgent(Agent):
     def __init__(self, unique_id, model, pos):
@@ -28,6 +30,7 @@ class DroneAgent(Agent):
         self.detected_palms_in_photo = {} # (x,y): confianza, (1,0): 0.9
 
         self.radio = Radio(model, unique_id)
+        self.rotors = Rotors(model)
         self.gps = GPS(*pos, model)
         self.camera = Camera(model)
         self.cv_model = CVModel(model)
@@ -73,59 +76,8 @@ class DroneAgent(Agent):
 
     def do_control(self):
         position = self.gps.get_position()
-        pos_str = str(position)
-
-        # Safety condition: return to charging station
-        if self.battery_level < 15:
-            self.state = "returning_to_charging_station"
-            return
-
-        # --- State: Exploring ---
-        if self.state == "exploring":
-      
-            # Case 1: Current position is infected → cure here
-            if pos_str in self.detected_palms_in_photo:
-                #print(f"[{self.unique_id}] Detected infected palm at current position {pos_str}. Switching to curing.")
-                self.target = position
-                self.state = "curing"
-                self.next_move = self.last_pos if hasattr(self, 'last_pos') else None
-
-            # Case 2: Choose closest infected palm from detected photo
-            elif self.detected_palms_in_photo:
-                # Convert string keys to tuple for distance calculation
-                detected_tuples = list(self.detected_palms_in_photo.keys())
-                closest = min(detected_tuples, key=lambda p: self.controller.manhattan_distance(position, p))
-                self.target = closest
-                self.state = "moving_to_target"
-                self.next_move = self.controller.move_towards(position, self.target, self.known_drones)
-
-            # Case 3: Use shared known targets if available
-            elif self.known_targets:
-                self.target = self.controller.choose_best_target(self.known_targets, position)
-                self.state = "moving_to_target"
-                self.next_move = self.controller.move_towards(position, self.target, self.known_drones)
-
-            # Case 4: Explore
-            else:
-                self.next_move = self.controller.explore(position, self.known_drones)
-
-        # --- State: Curing ---
-        elif self.state == "curing":
-            self.next_move = self.pos  # Stay in place
-
-        # --- State: Moving to Target ---
-        elif self.state == "moving_to_target":
-            if position == self.target:
-                self.state = "curing"
-                self.next_move = self.last_pos if hasattr(self, 'last_pos') else None
-            else:
-                self.next_move = self.controller.move_towards(position, self.target, self.known_drones)
-
-        # --- State: Returning to Charging Station ---
-        elif self.state == "returning_to_charging_station":
-            station = self.controller.get_nearest_station(position)
-            self.next_move = self.controller.move_towards(position, station, self.known_drones)
-
+        self.state = "exploring"
+        self.next_move = self.controller.explore(position, self.known_drones)
 
 
     def do_action(self):
@@ -133,11 +85,9 @@ class DroneAgent(Agent):
             position = self.gps.get_position()
             self.medicine.dispense(position)
 
-        elif self.next_move and self.in_bounds(self.next_move):
-            self.last_pos = self.gps.get_position()  # Save previous position for direction
-            self.model.grid.move_agent(self, self.next_move)
-            self.gps.set_position(*self.next_move)
-            self.battery.consume(1)
+        elif self.next_move:
+            self.last_pos = self.gps.get_position()
+            self.rotors.move(self, self.next_move)
         else:
             # Optionally log or handle the invalid move
             print(f"[WARNING] Drone {self.unique_id} attempted invalid move to {self.next_move}")
