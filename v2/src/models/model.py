@@ -1,12 +1,11 @@
 import random
-
 from mesa import Model
 from mesa.space import MultiGrid
 from mesa.time import RandomActivation
 
 from src.agents.PalmAgent import PalmAgent
 from src.agents.DroneAgent import DroneAgent
-from src.agents.GridCellAgent import GridCellAgent  # ← NEW
+from src.agents.GridCellAgent import GridCellAgent
 
 
 class PalmerasModel(Model):
@@ -32,14 +31,15 @@ class PalmerasModel(Model):
         # 🟫 GridCellAgents
         for x in range(width):
             for y in range(height):
-                cell_agent = GridCellAgent(self.next_id(), (x, y), self)
+                cell_agent = GridCellAgent(self.next_id(), self, (x, y))
                 self.grid.place_agent(cell_agent, (x, y))
+                self.schedule.add(cell_agent)
 
         # 🌴 PalmAgents
         for (contents, x, y) in self.grid.coord_iter():
             if random.random() < self.densidad:
                 estado_inicial = "infectada" if random.random() < 0.1 else "verde"
-                palm = PalmAgent(self.next_id(), (x, y), self, estado_inicial)
+                palm = PalmAgent(self.next_id(), self, (x, y), estado_inicial)
                 self.grid.place_agent(palm, (x, y))
                 self.schedule.add(palm)
 
@@ -47,24 +47,62 @@ class PalmerasModel(Model):
         for _ in range(self.n_drones):
             x = self.random.randrange(self.grid.width)
             y = self.random.randrange(self.grid.height)
-            drone = DroneAgent(self.next_id(), (x, y), self)
+            drone = DroneAgent(self.next_id(), self, (x, y))
             self.grid.place_agent(drone, (x, y))
             self.schedule.add(drone)
             print(f"[INFO] Drone #{drone.unique_id} created at position ({x}, {y})")
 
     def update_blackboard_drone_positions(self, agent_id, position):
-        """Update drone position and recompute visibility overlays."""
-        print(f"[DEBUG] Updating drone #{agent_id} position to {position}")
-        self.blackboard["drones_positions"][agent_id] = position
+        print("\n" * 5)
+        print(" =========================> BLACKBOARD UPDATE POSITION DEBUG <=========================\n")
+        print(f"[DEBUG] Updating drone #{agent_id} position to {position}\n")
 
+        self.blackboard["drones_positions"][agent_id] = position
         self.reset_grid_cells()
         self.set_grid_cells()
 
+        print("\n =========================> GRID STATUS DEBUG <=========================\n")
+        print("     " + " ".join(f"{x:02}" for x in range(self.grid.width)))
+
+        for y in range(self.grid.height - 1, -1, -1):
+            row = ""
+            for x in range(self.grid.width):
+                agents = self.grid.get_cell_list_contents((x, y))
+                cell_agent = next((a for a in agents if isinstance(a, GridCellAgent)), None)
+                if cell_agent:
+                    row += cell_agent.get_status_char(self.blackboard["drones_positions"]) + " "
+                else:
+                    row += "? "
+            print(f"Row {y:02}: {row}")
+
+        visible_cells = sum(
+            1 for agent in self.schedule.agents
+            if isinstance(agent, GridCellAgent) and agent._visible_by_drones_count > 0
+        )
+        total_cells = self.grid.width * self.grid.height
+        print(f"\n[DEBUG] Visible cells: {visible_cells}/{total_cells} ({100 * visible_cells / total_cells:.2f}%)")
+        print("\nLegend: D = Drone, V = Visible, . = Not visible, ? = Missing GridCellAgent\n")
+        print("\n" * 3)
+
     def reset_grid_cells(self):
+        total_cells = self.grid.width * self.grid.height
+
+        visible_before = sum(
+            1 for agent in self.schedule.agents
+            if isinstance(agent, GridCellAgent) and agent._visible_by_drones_count > 0
+        )
+        print(f"[DEBUG] Visible grid cells BEFORE reset: {visible_before}/{total_cells} ({(visible_before / total_cells) * 100:.2f}%)")
+
         print("[DEBUG] Resetting all grid cell visibility...")
         for agent in self.schedule.agents:
             if isinstance(agent, GridCellAgent):
                 agent.reset_visibility()
+
+        visible_after = sum(
+            1 for agent in self.schedule.agents
+            if isinstance(agent, GridCellAgent) and agent._visible_by_drones_count > 0
+        )
+        print(f"[DEBUG] Visible grid cells AFTER reset: {visible_after}/{total_cells} ({(visible_after / total_cells) * 100:.2f}%)")
 
     def set_grid_cells(self):
         print("[DEBUG] Recomputing visible grid cells from drone positions...")
@@ -98,10 +136,7 @@ class PalmerasModel(Model):
 
     def get_blackboard_palms_targets(self):
         raw_targets = self.blackboard.get("palms_targets", {})
-        return [
-            {"location": pos, "confidence": conf}
-            for pos, conf in raw_targets.items()
-        ]
+        return [{"location": pos, "confidence": conf} for pos, conf in raw_targets.items()]
 
     def get_blackboard_drones_positions(self):
         return self.blackboard.get("drones_positions", {})
