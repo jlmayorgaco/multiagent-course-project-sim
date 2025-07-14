@@ -39,7 +39,7 @@ class CVModel:
             center_x, center_y (int): center position of the drone in the grid
 
         Returns:
-            dict: {"(x, y)": confidence} for infected cells
+            dict: {(x, y): confidence} for infected cells
         """
         infected_dict = {}
 
@@ -56,9 +56,10 @@ class CVModel:
 
                 if (0 <= grid_x < self.model.grid.width) and (0 <= grid_y < self.model.grid.height):
                     if cell["infected"] == 1:
-                        infected_dict[str((grid_x, grid_y))] = cell["confidence"]
+                        infected_dict[(grid_x, grid_y)] = cell["confidence"]  # ← Use tuple here
 
         return infected_dict
+
 
     def get_camera_value_by_photo(self, photo_data):
         return self.analyze(photo_data)
