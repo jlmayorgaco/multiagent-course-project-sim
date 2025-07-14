@@ -8,16 +8,54 @@ class Controller:
     def choose_best_target(self, targets, current_pos):
         """
         Choose the closest infected palm (or highest confidence) as target.
+        Assumes targets is a list of dicts: [{"location": (x, y), "confidence": float}]
         """
+        print("\n--- choose_best_target DEBUG ---")
+        print(f"[Input] Current drone position: {current_pos}")
+        print(f"[Input] Targets (raw): {targets}")
+
         if not targets:
+            print("[Info] No targets provided. Returning None.")
             return None
 
-        # Sort by Manhattan distance from current position
-        sorted_targets = sorted(
-            targets,
-            key=lambda t: self.manhattan_distance(current_pos, t["location"])
-        )
-        return sorted_targets[0]["location"]
+        try:
+            # Normalize the location field (convert strings to tuples)
+            normalized_targets = []
+            for t in targets:
+                loc = t["location"]
+                if isinstance(loc, str):
+                    try:
+                        loc = eval(loc)
+                    except Exception as e:
+                        print(f"[Error] Could not parse location string: {loc}, error: {e}")
+                        continue
+                normalized_targets.append({
+                    "location": loc,
+                    "confidence": t["confidence"]
+                })
+
+            # Sort by Manhattan distance
+            sorted_targets = sorted(
+                normalized_targets,
+                key=lambda t: self.manhattan_distance(current_pos, t["location"])
+            )
+
+            print("[Debug] Sorted targets by distance:")
+            for i, t in enumerate(sorted_targets):
+                dist = self.manhattan_distance(current_pos, t["location"])
+                print(f"  {i+1}. Location: {t['location']}, Confidence: {t['confidence']:.4f}, Distance: {dist}")
+
+            selected = sorted_targets[0]["location"]
+            print(f"[Output] Selected target: {selected}")
+            print("--- END choose_best_target DEBUG ---\n")
+            return selected
+
+        except Exception as e:
+            print("[Fatal Error] Exception while choosing best target:", str(e))
+            return None
+
+
+
 
     def explore(self, current_pos, known_drones):
         """
