@@ -48,13 +48,16 @@ class DroneAgent(Agent):
         self.do_action()
         self.do_output_communication()
 
+    def in_bounds(self, pos):
+        x, y = pos
+        return 0 <= x < self.model.grid.width and 0 <= y < self.model.grid.height
+
     def do_input_communication(self):
         self.known_targets = self.radio.read_blackboard_palms_targets()
         self.known_drones = self.radio.read_blackboard_drones_positions()
 
     def do_output_communication(self):
         self.radio.publish_blackboard_drones_position(self.gps.get_position())
-        # Only if the drone saw some palms
         if self.detected_palms_in_photo:
             for pos, confidence in self.detected_palms_in_photo.items():
                 self.radio.publish_blackboard_palms_target(pos, confidence)
@@ -103,7 +106,7 @@ class DroneAgent(Agent):
             # Case 2: Choose closest infected palm from detected photo
             elif self.detected_palms_in_photo:
                 # Convert string keys to tuple for distance calculation
-                detected_tuples = [eval(k) for k in self.detected_palms_in_photo.keys()]
+                detected_tuples = list(self.detected_palms_in_photo.keys())
                 closest = min(detected_tuples, key=lambda p: self.controller.manhattan_distance(position, p))
                 print(f"[{self.unique_id}] Moving to new infected palm at {closest}")
                 self.target = closest
@@ -145,12 +148,15 @@ class DroneAgent(Agent):
             position = self.gps.get_position()
             self.medicine.dispense(position)
 
-        elif self.next_move:
+        elif self.next_move and self.in_bounds(self.next_move):
             self.last_pos = self.gps.get_position()  # Save previous position for direction
             self.model.grid.move_agent(self, self.next_move)
             self.gps.set_position(*self.next_move)
             self.battery.consume(1)
-
+        else:
+            # Optionally log or handle the invalid move
+            print(f"[WARNING] Drone {self.unique_id} attempted invalid move to {self.next_move}")
+    
     def get_direction(self):
         # Compute direction vector as tuple (dx, dy)
         x1, y1 = self.last_pos
