@@ -9,24 +9,30 @@ from src.agents.DroneAgent import DroneAgent
 # Models
 from src.models.model import PalmerasModel
 # ---------------------------------------------------------------- #
+
 def agent_portrayal(agent):
     portrayal = {"Layer": 0, "w": 1, "h": 1}
-    
+
     if isinstance(agent, PalmAgent):
         if agent.estado == "verde":
             portrayal["Shape"] = "images/palm_green.png"
         elif agent.estado == "infectada":
             portrayal["Shape"] = "images/palm_brown.png"
-    
+
     elif isinstance(agent, DroneAgent):
-        # Base layer for the drone position
+        # Set up base portrayal
         portrayal = {
             "Layer": 1,
-            "w": 1,
-            "h": 1,
+            "w": 3,
+            "h": 3,
+            "text": str(agent.unique_id),
+            "text_color": "black"
         }
 
-        # Use arrow based on direction if there's a next move
+        # Log base state
+        print(f"[Drone {agent.unique_id}] Position: {agent.pos}, Next move: {agent.next_move}, State: {agent.state}")
+
+        # Determine direction and image
         if agent.next_move and agent.next_move != agent.pos:
             dx = agent.next_move[0] - agent.pos[0]
             dy = agent.next_move[1] - agent.pos[1]
@@ -44,8 +50,16 @@ def agent_portrayal(agent):
             }
 
             direction_name = direction_map.get(direction, "up")
-            portrayal["Shape"] = f"images/drone_arrow_{direction_name}.png"
+            image_path = f"images/drone_arrow_{direction_name}.png"
+            portrayal["Shape"] = image_path
+
+            # Detailed debug output
+            print(f"[Drone {agent.unique_id}] Direction: {direction}, Arrow image: {image_path}")
         else:
             portrayal["Shape"] = "images/drone.png"
+            print(f"[Drone {agent.unique_id}] Staying in place. Default image: images/drone.png")
+
+        # Log final portrayal
+        print(f"[Drone {agent.unique_id}] Portrayal: {portrayal}")
 
     return portrayal
