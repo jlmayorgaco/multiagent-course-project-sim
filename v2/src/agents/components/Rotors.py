@@ -3,12 +3,15 @@ class Rotors:
         self.model = model
 
     def move(self, drone, next_pos):
-        if self.in_bounds(next_pos):
+        if self.in_bounds(next_pos) and drone.battery.get_level() > 0:
             self.model.grid.move_agent(drone, next_pos)
             drone.gps.set_position(*next_pos)
             drone.battery.consume(1)
         else:
-            print(f"[WARNING] Drone {drone.unique_id} attempted invalid move to {next_pos}")
+            if drone.battery.get_level() <= 0:
+                drone.state = "death"
+            else:
+                print(f"[WARNING] Drone {drone.unique_id} attempted invalid move to {next_pos}")
 
     def in_bounds(self, pos):
         x, y = pos
