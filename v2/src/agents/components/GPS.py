@@ -1,5 +1,3 @@
-from mesa.space import Coordinate
-from src.agents.GridCellAgent import GridCellAgent
 
 class GPS:
     def __init__(self, x, y, model):
