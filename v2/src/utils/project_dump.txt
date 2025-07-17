@@ -1,0 +1,963 @@
+
+# === FILE: server.py ===
+# ---------------------------------------------------------------- #
+# -- Imports Utils ------------------------------------------------ #
+# ---------------------------------------------------------------- #
+import sys
+import os
+sys.path.append(os.path.abspath("src"))
+# ---------------------------------------------------------------- #
+
+# ---------------------------------------------------------------- #
+# -- Imports MESA ------------------------------------------------ #
+# ---------------------------------------------------------------- #
+
+from mesa.visualization.UserParam import Slider
+from mesa.visualization.modules import CanvasGrid
+from mesa.datacollection import DataCollector
+from mesa.visualization.ModularVisualization import ModularServer
+
+# ---------------------------------------------------------------- #
+
+# ---------------------------------------------------------------- #
+# -- Imports Agents y Models ------------------------------------- #
+# ---------------------------------------------------------------- #
+
+# Agents
+from src.agents.PalmAgent import PalmAgent
+from src.agents.DroneAgent import DroneAgent
+
+# Models
+from src.models.model import PalmerasModel
+
+
+# ---------------------------------------------------------------- #
+
+# Grid Config
+from src.visualization.AgentPortrayal import AgentPortrayal
+from src.visualization.BlackboardText import BlackboardText
+
+grid = CanvasGrid(AgentPortrayal, 10, 10, 600, 600)
+blackboard_text = BlackboardText()
+
+
+model_params = {
+
+    "width": 10,
+    "height": 10,
+
+    "densidad": Slider("Densidad de palmeras", 0.1, 0.1, 1.0, 0.1),
+    "n_drones": Slider("Número de drones", 3, 1, 10, 1),
+
+    "tasa_propagacion": Slider("Tasa de propagación", 0.12, 0.0, 1.0, 0.05),
+    "tasa_cura": Slider("Tasa de curación por drones", 1.0, 0.0, 1.0, 0.05),
+}
+
+server = ModularServer(
+    PalmerasModel,
+    [grid, blackboard_text],
+    "Simulación de Palmeras y Drones",
+    model_params
+)
+server.port = 8560
+server.launch()
+
+================================================================================
+
+# === FILE: dump_all_python_files_to_txt.py ===
+import os
+
+def dump_all_python_files_to_txt(root_dir, output_file="project_dump.txt"):
+    with open(output_file, "w", encoding="utf-8") as out:
+        for dirpath, _, filenames in os.walk(root_dir):
+            for filename in filenames:
+                if filename.endswith(".py"):
+                    file_path = os.path.join(dirpath, filename)
+                    relative_path = os.path.relpath(file_path, root_dir)
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            content = f.read()
+                        out.write(f"\n# === FILE: {relative_path} ===\n")
+                        out.write(content)
+                        out.write("\n" + "=" * 80 + "\n")
+                    except Exception as e:
+                        out.write(f"\n# === ERROR reading {relative_path}: {e} ===\n")
+
+    print(f"[DONE] Python files saved to: {output_file}")
+
+# Run the script for your current project
+if __name__ == "__main__":
+    dump_all_python_files_to_txt(root_dir=".")
+
+================================================================================
+
+# === FILE: src/visualization/BlackboardText.py ===
+from mesa.visualization.modules import TextElement
+
+class BlackboardText(TextElement):
+    def render(self, model):
+        # Retrieve blackboard data
+        targets = model.blackboard.get("palms_targets", {})
+        drones = model.blackboard.get("drones_positions", {})
+
+        # Infected Palm Targets
+        target_lines = ["<b>🟫 Infected Palm Targets</b>"]
+        if targets:
+            for i, (location_str, confidence) in enumerate(targets.items()):
+                target_lines.append(f"{i+1}. {location_str} (conf: {confidence:.2f})")
+        else:
+            target_lines.append("None")
+
+        # Drone Positions
+        drone_lines = ["<br><b>📍 Drone Positions</b>"]
+        if drones:
+            for drone_id, position in drones.items():
+                drone_lines.append(f"Drone {drone_id}: {position}")
+        else:
+            drone_lines.append("None")
+
+        # Combine output
+        return "<br>".join(target_lines + drone_lines)
+
+================================================================================
+
+# === FILE: src/visualization/AgentPortrayal.py ===
+# ---------------------------------------------------------------- #
+# -- Imports Agents y Models ------------------------------------- #
+# ---------------------------------------------------------------- #
+
+from src.agents.PalmAgent import PalmAgent
+from src.agents.DroneAgent import DroneAgent
+from src.agents.GridCellAgent import GridCellAgent
+
+from src.models.model import PalmerasModel
+# ---------------------------------------------------------------- #
+
+
+# ---------------------- Individual Portrayals ------------------- #
+
+def GridCellAgentPortrayal(agent):
+    x, y = agent.pos
+    text_color = "gray"
+
+    # Color logic based on visibility and targeting
+    if agent.IsPalmTargeted:
+        color = "#FF5733"  # Reddish tone for infected palm target
+        alpha = 0.6
+    elif agent.IsVisibleByDrones:
+        color = "#EBB682"  # Black for drone vision
+        text_color= "black"
+        alpha = 0.3
+    else:
+        color = "#B56E28"  # Default background
+        text_color= "white"
+        alpha = 1.0
+
+    return {
+        "Layer": 0,
+        "Shape": "rect",
+        "Color": color,
+        "alpha": alpha,
+        "w": 1,
+        "h": 1,
+        "Filled": "true",
+        "text": f"({x},{y})",
+        "text_color": text_color
+    }
+
+
+def PalmAgentPortrayal(agent):
+    shapes = {
+        "verde": "images/palm_green.png",
+        "infectada": "images/palm_brown.png"
+    }
+
+    shape = shapes.get(agent.estado, "images/palm_green.png")
+
+    return {
+        "Layer": 1,
+        "Shape": shape,
+        "w": 1,
+        "h": 1
+    }
+
+
+def DroneAgentPortrayal(agent):
+    x, y = agent.pos
+    portrayal = {
+        "Layer": 2,
+        "w": 3,
+        "h": 3,
+        "id": str(agent.unique_id),
+        "(x,y)": str(agent.pos),
+        "text": str(agent.unique_id),
+        "text_color": "black",
+    }
+
+    print(f"[Drone {agent.unique_id}] Position: {agent.pos}, Next move: {agent.next_move}, State: {agent.state}")
+
+    if agent.next_move and agent.next_move != agent.pos:
+        dx = agent.next_move[0] - x
+        dy = agent.next_move[1] - y
+        direction = (dx, dy)
+
+        direction_map = {
+            (0, 1): "up",
+            (0, -1): "down",
+            (1, 0): "right",
+            (-1, 0): "left",
+            (1, 1): "up_right",
+            (-1, 1): "up_left",
+            (1, -1): "down_right",
+            (-1, -1): "down_left",
+        }
+
+        direction_name = direction_map.get(direction, "up")
+        portrayal["Shape"] = "images/drone.png"
+        print(f"[Drone {agent.unique_id}] Direction: {direction}, Arrow image: images/drone.png")
+    else:
+        portrayal["Shape"] = "images/drone.png"
+        print(f"[Drone {agent.unique_id}] Staying in place. Default image: images/drone.png")
+
+    print(f"[Drone {agent.unique_id}] Portrayal: {portrayal}")
+    return portrayal
+
+
+# ------------------------- Unified Entry ------------------------ #
+
+def AgentPortrayal(agent):
+    if not agent:
+        return None
+
+    if isinstance(agent, GridCellAgent):
+        return GridCellAgentPortrayal(agent)
+
+    elif isinstance(agent, PalmAgent):
+        return PalmAgentPortrayal(agent)
+
+    elif isinstance(agent, DroneAgent):
+        return DroneAgentPortrayal(agent)
+
+    return None
+
+================================================================================
+
+# === FILE: src/agents/__init__.py ===
+
+================================================================================
+
+# === FILE: src/agents/PalmAgent.py ===
+from mesa import Agent
+import random
+
+class PalmAgent(Agent):
+    def __init__(self, unique_id, model, pos, estado="verde"):
+        super().__init__(unique_id, model)
+        self.pos = pos
+        self.estado = estado
+
+    def step(self):
+        if self.estado == "verde":
+            vecinos = self.model.grid.get_neighbors(self.pos, moore=True, include_center=False)
+            for vecino in vecinos:
+                if isinstance(vecino, PalmAgent) and vecino.estado == "infectada":
+                    if random.random() < self.model.tasa_propagacion:
+                        self.estado = "infectada"
+                        break
+================================================================================
+
+# === FILE: src/agents/GridCellAgent.py ===
+from mesa import Agent
+
+class GridCellAgent(Agent):
+    def __init__(self, unique_id, model, pos):
+        super().__init__(unique_id, model)
+        self._initial_pos = pos  # Optional for debugging  # Internally store pos only once during initialization
+        self.state = "empty"  # Could be "empty", "palm", "burned", etc.
+
+        self._visible_by_drones_count = 0
+        self._targeted_palm_by_drones_count = 0
+
+    @property
+    def IsVisibleByDrones(self):
+        return self._visible_by_drones_count > 0
+
+    @property
+    def IsPalmTargeted(self):
+        return self._targeted_palm_by_drones_count > 0
+
+    # --- Methods to modify visibility and target counters ---
+    def mark_visible(self):
+        self._visible_by_drones_count += 1
+        print(f"[DEBUG] → Cell at {self.pos} now visible by {self._visible_by_drones_count} drone(s)")
+
+    def unmark_visible(self):
+        self._visible_by_drones_count = max(0, self._visible_by_drones_count - 1)
+
+    def reset_visibility(self):
+        if self._visible_by_drones_count > 0:
+            print(f"[DEBUG] → Resetting visibility for cell at {self.pos}")
+        self._visible_by_drones_count = 0
+
+    def mark_as_target(self):
+        self._targeted_palm_by_drones_count += 1
+        print(f"[DEBUG] → Cell at {self.pos} marked as a target")
+
+    def unmark_as_target(self):
+        self._targeted_palm_by_drones_count = max(0, self._targeted_palm_by_drones_count - 1)
+
+    def reset_target(self):
+        if self._targeted_palm_by_drones_count > 0:
+            print(f"[DEBUG] → Resetting target for cell at {self.pos}")
+        self._targeted_palm_by_drones_count = 0
+
+    # --- Debug and Visualization Helpers ---
+    def get_status_char(self, drone_positions):
+        if self.pos in drone_positions.values():
+            return "D"
+        elif self.IsVisibleByDrones:
+            return "V"
+        else:
+            return "."
+
+    def __repr__(self):
+        return (f"<GridCellAgent at {self.pos}, state={self.state}, "
+                f"visible={self.IsVisibleByDrones}, targeted={self.IsPalmTargeted}>")
+
+    def step(self):
+        # Static behavior unless extended for animation or dynamic simulation
+        pass
+
+================================================================================
+
+# === FILE: src/agents/DroneAgent.py ===
+import random
+from mesa import Agent
+
+# Imports Classes
+from .PalmAgent import PalmAgent
+from .components.GPS import GPS
+from .components.Radio import Radio
+from .components.Battery import Battery
+from .components.Camera import Camera
+from .components.Controller import Controller
+from .components.MedicineDispenser import MedicineDispenser
+from .components.CVModel import CVModel
+from .components.Rotors import Rotors
+
+
+class DroneAgent(Agent):
+    def __init__(self, unique_id, model, pos):
+        super().__init__(unique_id, model)
+
+        self.pos = pos
+        self.next_move = pos
+        self.last_pos = pos  # Used to calculate direction
+
+        self.state = "exploring"
+        self.target = None
+
+        self.known_targets = []
+        self.known_drones = []
+
+        self.detected_palms_in_photo = {} # (x,y): confianza, (1,0): 0.9
+
+        self.radio = Radio(model, unique_id)
+        self.rotors = Rotors(model)
+        self.gps = GPS(*pos, model)
+        self.camera = Camera(model)
+        self.cv_model = CVModel(model)
+        self.controller = Controller()
+        self.battery = Battery(100)
+        self.medicine = MedicineDispenser(model, 100)
+
+        self.photo = None
+        self.vision = None
+        self.battery_level = 100
+        self.medicine_level = 100
+
+    def step(self):
+        #print(f"[Drone {self.unique_id}] Step - Position: {self.pos}, State: {self.state}")
+        self.do_input_communication()
+        self.do_sensing()
+        self.do_control()
+        self.do_action()
+        self.do_output_communication()
+
+    def in_bounds(self, pos):
+        x, y = pos
+        return 0 <= x < self.model.grid.width and 0 <= y < self.model.grid.height
+
+    def do_input_communication(self):
+        self.known_targets = self.radio.read_blackboard_palms_targets()
+        self.known_drones = self.radio.read_blackboard_drones_positions()
+
+    def do_output_communication(self):
+        self.radio.publish_blackboard_drones_position(self.gps.get_position())
+        if self.detected_palms_in_photo:
+            for pos, confidence in self.detected_palms_in_photo.items():
+                self.radio.publish_blackboard_palms_target(pos, confidence)
+        self.detected_palms_in_photo = {}
+
+    def do_sensing(self):
+        self.photo = self.camera.take_photo(self.pos)
+        self.vision = self.cv_model.analyze(self.photo)
+        self.battery_level = self.battery.get_level()
+        self.medicine_level = self.medicine.get_level()
+        x0 , y0 = self.pos
+        self.detected_palms_in_photo = self.cv_model.convert_infected_matrix_to_dict(self.vision, x0, y0)
+
+    def do_control(self):
+        position = self.gps.get_position()
+        self.state = "exploring"
+        self.next_move = self.controller.explore(position, self.known_drones)
+
+
+    def do_action(self):
+        if self.state == "curing":
+            position = self.gps.get_position()
+            self.medicine.dispense(position)
+
+        elif self.next_move:
+            self.last_pos = self.gps.get_position()
+            self.rotors.move(self, self.next_move)
+        else:
+            # Optionally log or handle the invalid move
+            print(f"[WARNING] Drone {self.unique_id} attempted invalid move to {self.next_move}")
+    
+    def get_direction(self):
+        # Compute direction vector as tuple (dx, dy)
+        x1, y1 = self.last_pos
+        x2, y2 = self.gps.get_position()
+        return (x2 - x1, y2 - y1)
+
+================================================================================
+
+# === FILE: src/agents/components/GPS.py ===
+from mesa.space import Coordinate
+from src.agents.GridCellAgent import GridCellAgent
+
+class GPS:
+    def __init__(self, x, y, model):
+        self.x = x
+        self.y = y
+        self.model = model
+        self.last_vision_area = set()
+
+    def get_position(self):
+        return (self.x, self.y)
+
+    def set_position(self, x, y):
+        self.x = x
+        self.y = y
+================================================================================
+
+# === FILE: src/agents/components/Controller.py ===
+# src/agents/components/Controller.py
+import random
+
+class Controller:
+    def __init__(self):
+        pass
+
+    def choose_best_target(self, targets, current_pos):
+        """
+        Choose the closest infected palm (or highest confidence) as target.
+        Assumes targets is a list of dicts: [{"location": (x, y), "confidence": float}]
+        """
+        print("\n--- choose_best_target DEBUG ---")
+        print(f"[Input] Current drone position: {current_pos}")
+        print(f"[Input] Targets (raw): {targets}")
+
+        if not targets:
+            print("[Info] No targets provided. Returning None.")
+            return None
+
+        try:
+            # Normalize the location field (convert strings to tuples)
+            normalized_targets = []
+            for t in targets:
+                loc = t["location"]
+                if isinstance(loc, str):
+                    try:
+                        loc = eval(loc)
+                    except Exception as e:
+                        print(f"[Error] Could not parse location string: {loc}, error: {e}")
+                        continue
+                normalized_targets.append({
+                    "location": loc,
+                    "confidence": t["confidence"]
+                })
+
+            # Sort by Manhattan distance
+            sorted_targets = sorted(
+                normalized_targets,
+                key=lambda t: self.manhattan_distance(current_pos, t["location"])
+            )
+
+            print("[Debug] Sorted targets by distance:")
+            for i, t in enumerate(sorted_targets):
+                dist = self.manhattan_distance(current_pos, t["location"])
+                print(f"  {i+1}. Location: {t['location']}, Confidence: {t['confidence']:.4f}, Distance: {dist}")
+
+            selected = sorted_targets[0]["location"]
+            print(f"[Output] Selected target: {selected}")
+            print("--- END choose_best_target DEBUG ---\n")
+            return selected
+
+        except Exception as e:
+            print("[Fatal Error] Exception while choosing best target:", str(e))
+            return None
+
+
+
+
+    def explore(self, current_pos, known_drones):
+        """
+        Randomly pick a safe nearby position to explore (avoid collisions).
+        """
+        possible_moves = self.get_neighborhood(current_pos)
+        safe_moves = [
+            move for move in possible_moves
+            if move not in known_drones.values()  # avoid collision
+        ]
+        return random.choice(safe_moves) if safe_moves else current_pos
+
+    def move_towards(self, current, goal, known_drones):
+        """
+        Move one step toward goal, avoiding other drones.
+        """
+        dx = goal[0] - current[0]
+        dy = goal[1] - current[1]
+
+        step_x = current[0] + (1 if dx > 0 else -1 if dx < 0 else 0)
+        step_y = current[1] + (1 if dy > 0 else -1 if dy < 0 else 0)
+
+        next_pos = (step_x, step_y)
+
+        # Avoid collision if possible
+        if next_pos in known_drones.values():
+            alternatives = self.get_neighborhood(current)
+            for alt in alternatives:
+                if alt not in known_drones.values():
+                    return alt
+            return current  # stay if blocked
+
+        return next_pos
+
+    def get_nearest_station(self, current_pos):
+        """
+        Returns the hardcoded location of the nearest charging station.
+        For now, assume (0, 0) is always the station.
+        """
+        return (0, 0)
+
+    def get_neighborhood(self, pos):
+        """
+        Return Moore neighborhood (8 adjacent cells).
+        """
+        x, y = pos
+        return [
+            (x + dx, y + dy)
+            for dx in [-1, 0, 1]
+            for dy in [-1, 0, 1]
+            if not (dx == 0 and dy == 0)
+        ]
+
+    def manhattan_distance(self, a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+================================================================================
+
+# === FILE: src/agents/components/CVModel.py ===
+import random
+
+class CVModel:
+    def __init__(self, model):
+        self.model = model
+
+    def analyze(self, photo_data):
+        """
+        Analyze each cell in photo_data and return a matrix of:
+        { 'infected': 0 or 1, 'confidence': float }
+
+        Args:
+            photo_data (list of list): matrix with 'verde', 'infectada', or None
+
+        Returns:
+            list of list of dict: same shape with infection prediction per cell
+        """
+        result_matrix = []
+
+        for row in photo_data:
+            result_row = []
+            for cell in row:
+                infected = 1 if cell == "infectada" else 0
+                confidence = round(random.uniform(0.6, 0.99), 4)
+                result_row.append({
+                    "infected": infected,
+                    "confidence": confidence
+                })
+            result_matrix.append(result_row)
+
+        return result_matrix
+
+    def convert_infected_matrix_to_dict(self, result, center_x, center_y):
+        """
+        Convert the infection matrix into a dictionary from the *center* position.
+
+        Args:
+            result (list of list of dict): Output from analyze()
+            center_x, center_y (int): center position of the drone in the grid
+
+        Returns:
+            dict: {(x, y): confidence} for infected cells
+        """
+        infected_dict = {}
+
+        height = len(result)
+        width = len(result[0]) if height > 0 else 0
+
+        offset_y = height // 2
+        offset_x = width // 2
+
+        for dy, row in enumerate(result):
+            for dx, cell in enumerate(row):
+                grid_x = center_x + (dx - offset_x)
+                grid_y = center_y + (dy - offset_y)
+
+                if (0 <= grid_x < self.model.grid.width) and (0 <= grid_y < self.model.grid.height):
+                    if cell["infected"] == 1:
+                        infected_dict[(grid_x, grid_y)] = cell["confidence"]  # ← Use tuple here
+
+        return infected_dict
+
+
+    def get_camera_value_by_photo(self, photo_data):
+        return self.analyze(photo_data)
+
+================================================================================
+
+# === FILE: src/agents/components/Battery.py ===
+class Battery:
+    def __init__(self, capacity=100):
+        self.capacity = capacity  # max capacity
+        self.level = capacity     # current level
+
+    def get_level(self):
+        return self.level
+
+    def consume(self, amount):
+        self.level = max(0, self.level - amount)
+
+    def recharge(self, amount):
+        self.level = min(self.capacity, self.level + amount)
+
+    def is_low(self, threshold=20):
+        return self.level <= threshold
+
+================================================================================
+
+# === FILE: src/agents/components/Rotors.py ===
+class Rotors:
+    def __init__(self, model):
+        self.model = model
+
+    def move(self, drone, next_pos):
+        if self.in_bounds(next_pos):
+            self.model.grid.move_agent(drone, next_pos)
+            drone.gps.set_position(*next_pos)
+            drone.battery.consume(1)
+        else:
+            print(f"[WARNING] Drone {drone.unique_id} attempted invalid move to {next_pos}")
+
+    def in_bounds(self, pos):
+        x, y = pos
+        return 0 <= x < self.model.grid.width and 0 <= y < self.model.grid.height
+
+================================================================================
+
+# === FILE: src/agents/components/Camera.py ===
+class Camera:
+    def __init__(self, model, radius=1):
+        self.model = model
+        self.radius = radius
+        self.last_photo = None
+
+    def take_photo(self, pos):
+        """Returns a matrix of palm health status (or None) around the given position."""
+        x0, y0 = pos
+        result = []
+
+        for dy in range(-self.radius, self.radius + 1):
+            row = []
+            for dx in range(-self.radius, self.radius + 1):
+                x, y = x0 + dx, y0 + dy
+                if 0 <= x < self.model.grid.width and 0 <= y < self.model.grid.height:
+                    cell_agents = self.model.grid.get_cell_list_contents((x, y))
+                    palm = next((a for a in cell_agents if a.__class__.__name__ == "PalmAgent"), None)
+                    row.append(palm.estado if palm else None)
+                else:
+                    row.append(None)  # Outside the grid
+            result.append(row)
+
+        self.last_photo = result
+        return result
+
+================================================================================
+
+# === FILE: src/agents/components/Radio.py ===
+# src/agents/components/Radio.py
+
+class Radio:
+    def __init__(self, model, agent_id=None):
+        self.model = model
+        self.agent_id = agent_id
+        self.inbox = []
+
+    # --- Blackboard writes ---
+    def publish_blackboard_palms_target(self, position, confidence):
+        self.model.update_blackboard_palms_targets(position, confidence)
+
+    def publish_blackboard_drones_position(self, position):
+        if self.agent_id is not None:
+            self.model.update_blackboard_drone_positions(self.agent_id, position)
+
+    # --- Blackboard reads (now via model) ---
+    def read_blackboard_palms_targets(self):
+        return self.model.get_blackboard_palms_targets()
+
+    def read_blackboard_drones_positions(self):
+        return self.model.get_blackboard_drones_positions()
+
+================================================================================
+
+# === FILE: src/agents/components/IRSensor.py ===
+import random
+
+class IRSensor:
+    def __init__(self, threshold=5.0):
+        self.threshold = threshold
+
+    def get_value(self):
+        # Simulated sensor value (e.g., distance in meters)
+        return round(random.uniform(0.0, 10.0), 2)
+
+    def is_obstacle_detected(self):
+        return self.get_value() < self.threshold
+
+================================================================================
+
+# === FILE: src/agents/components/MedicineDispenser.py ===
+# src/agents/components/MedicineDispenser.py
+
+class MedicineDispenser:
+    def __init__(self, model, capacity=100):
+        self.model = model
+        self.capacity = capacity
+        self.level = capacity
+
+    def dispense(self, position, amount=10):
+        """
+        Attempts to cure an infected palm at the given position.
+        If successful, reduces internal medicine level and updates the palm state.
+        """
+        if self.level < amount:
+            return False  # Not enough medicine
+
+        # Get all agents at the same position
+        agents = self.model.grid.get_cell_list_contents([position])
+        for agent in agents:
+            if hasattr(agent, 'estado') and agent.estado == "infectada":
+                agent.estado = "verde"
+                self.level -= amount
+                return True
+
+        return False  # No infected palm found at position
+
+    def refill(self):
+        self.level = self.capacity
+
+    def get_level(self):
+        return self.level
+
+================================================================================
+
+# === FILE: src/utils/convertions.py ===
+def convert_infected_matrix_to_dict(result, top_left_x, top_left_y):
+    """
+    Convert the infection matrix into a dictionary:
+    {
+        "(x, y)": confidence
+    }
+    Only includes infected cells.
+
+    Parameters:
+        result (list of list of dict): Output from CVModel.analyze
+        top_left_x (int): X coordinate of top-left cell of the matrix
+        top_left_y (int): Y coordinate of top-left cell of the matrix
+
+    Returns:
+        dict: Detected infected cells with their coordinates as keys
+    """
+    infected_dict = {}
+
+    for dy, row in enumerate(result):
+        for dx, cell in enumerate(row):
+            if cell["infected"] == 1:
+                coord = (top_left_x + dx, top_left_y + dy)
+                infected_dict[str(coord)] = cell["confidence"]
+
+    return infected_dict
+
+================================================================================
+
+# === FILE: src/models/model.py ===
+import random
+from mesa import Model
+from mesa.space import MultiGrid
+from mesa.time import RandomActivation
+
+from src.agents.PalmAgent import PalmAgent
+from src.agents.DroneAgent import DroneAgent
+from src.agents.GridCellAgent import GridCellAgent
+
+
+class PalmerasModel(Model):
+    def __init__(self, width, height, densidad, n_drones, tasa_propagacion, tasa_cura):
+        self.width = width
+        self.height = height
+        self.densidad = densidad
+        self.n_drones = n_drones
+        self.tasa_propagacion = tasa_propagacion
+        self.tasa_cura = tasa_cura
+        self.schedule = RandomActivation(self)
+        self.grid = MultiGrid(width, height, torus=False)
+        self.running = True
+        self.current_id = 0
+
+        self.highlighted_cells = set()
+
+        self.blackboard = {
+            "palms_targets": {},       # Dict { (x, y): confidence }
+            "drones_positions": {}     # Dict { drone_id: (x, y) }
+        }
+
+        # 🟫 GridCellAgents
+        for x in range(width):
+            for y in range(height):
+                cell_agent = GridCellAgent(self.next_id(), self, (x, y))
+                self.grid.place_agent(cell_agent, (x, y))
+                self.schedule.add(cell_agent)
+
+        # 🌴 PalmAgents
+        for (contents, x, y) in self.grid.coord_iter():
+            if random.random() < self.densidad:
+                estado_inicial = "infectada" if random.random() < 0.1 else "verde"
+                palm = PalmAgent(self.next_id(), self, (x, y), estado_inicial)
+                self.grid.place_agent(palm, (x, y))
+                self.schedule.add(palm)
+
+        # 🚁 DroneAgents
+        for _ in range(self.n_drones):
+            x = self.random.randrange(self.grid.width)
+            y = self.random.randrange(self.grid.height)
+            drone = DroneAgent(self.next_id(), self, (x, y))
+            self.grid.place_agent(drone, (x, y))
+            self.schedule.add(drone)
+            print(f"[INFO] Drone #{drone.unique_id} created at position ({x}, {y})")
+
+    def update_blackboard_drone_positions(self, agent_id, position):
+        print("\n" * 5)
+        print(" =========================> BLACKBOARD UPDATE POSITION DEBUG <=========================\n")
+        print(f"[DEBUG] Updating drone #{agent_id} position to {position}\n")
+
+        self.blackboard["drones_positions"][agent_id] = position
+        self.reset_grid_cells()
+        self.set_grid_cells()
+
+        print("\n =========================> GRID STATUS DEBUG <=========================\n")
+        print("     " + " ".join(f"{x:02}" for x in range(self.grid.width)))
+
+        for y in range(self.grid.height - 1, -1, -1):
+            row = ""
+            for x in range(self.grid.width):
+                agents = self.grid.get_cell_list_contents((x, y))
+                cell_agent = next((a for a in agents if isinstance(a, GridCellAgent)), None)
+                if cell_agent:
+                    row += cell_agent.get_status_char(self.blackboard["drones_positions"]) + " "
+                else:
+                    row += "? "
+            print(f"Row {y:02}: {row}")
+
+        visible_cells = sum(
+            1 for agent in self.schedule.agents
+            if isinstance(agent, GridCellAgent) and agent._visible_by_drones_count > 0
+        )
+        total_cells = self.grid.width * self.grid.height
+        print(f"\n[DEBUG] Visible cells: {visible_cells}/{total_cells} ({100 * visible_cells / total_cells:.2f}%)")
+        print("\nLegend: D = Drone, V = Visible, . = Not visible, ? = Missing GridCellAgent\n")
+        print("\n" * 3)
+
+    def reset_grid_cells(self):
+        total_cells = self.grid.width * self.grid.height
+
+        visible_before = sum(
+            1 for agent in self.schedule.agents
+            if isinstance(agent, GridCellAgent) and agent._visible_by_drones_count > 0
+        )
+        print(f"[DEBUG] Visible grid cells BEFORE reset: {visible_before}/{total_cells} ({(visible_before / total_cells) * 100:.2f}%)")
+
+        print("[DEBUG] Resetting all grid cell visibility...")
+        for agent in self.schedule.agents:
+            if isinstance(agent, GridCellAgent):
+                agent.reset_visibility()
+
+        visible_after = sum(
+            1 for agent in self.schedule.agents
+            if isinstance(agent, GridCellAgent) and agent._visible_by_drones_count > 0
+        )
+        print(f"[DEBUG] Visible grid cells AFTER reset: {visible_after}/{total_cells} ({(visible_after / total_cells) * 100:.2f}%)")
+
+    def set_grid_cells(self):
+        print("[DEBUG] Recomputing visible grid cells from drone positions...")
+        for drone_id, drone_pos in self.blackboard["drones_positions"].items():
+            x, y = drone_pos
+            print(f"[DEBUG] Drone #{drone_id} field of view from ({x},{y}):")
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < self.grid.width and 0 <= ny < self.grid.height:
+                        print(f"   → Marking cell ({nx},{ny}) as visible")
+                        for agent in self.grid.get_cell_list_contents((nx, ny)):
+                            if isinstance(agent, GridCellAgent):
+                                agent.mark_visible()
+
+    def update_blackboard_palms_targets(self, position, confidence):
+        current = self.blackboard["palms_targets"].get(position, 0.0)
+        self.blackboard["palms_targets"][position] = max(current, confidence)
+
+        print(f"[DEBUG] Updating infected palm target at {position} with confidence {confidence}")
+
+        for agent in self.schedule.agents:
+            if isinstance(agent, GridCellAgent):
+                agent.reset_target()
+
+        for pos in self.blackboard["palms_targets"]:
+            print(f"[DEBUG] Marking cell {pos} as palm target")
+            for agent in self.grid.get_cell_list_contents(pos):
+                if isinstance(agent, GridCellAgent):
+                    agent.mark_as_target()
+
+    def get_blackboard_palms_targets(self):
+        raw_targets = self.blackboard.get("palms_targets", {})
+        return [{"location": pos, "confidence": conf} for pos, conf in raw_targets.items()]
+
+    def get_blackboard_drones_positions(self):
+        return self.blackboard.get("drones_positions", {})
+
+    def step(self):
+        print("\n[MODEL STEP] ---------")
+        self.schedule.step()
+
+================================================================================
