@@ -15,8 +15,14 @@ class Radio:
             self.model.update_blackboard_drone_positions(self.agent_id, position)
 
     # --- Blackboard reads (now via model) ---
+    def read_blackboard_charging_stations_positions(self):
+        return self.model.get_blackboard_charging_stations_positions()
+    
     def read_blackboard_palms_targets(self):
         return self.model.get_blackboard_palms_targets()
 
     def read_blackboard_drones_positions(self):
         return self.model.get_blackboard_drones_positions()
+
+    def report_palm_cured(self, position, confidence = 0):
+        self.model.report_palm_cured(position, confidence)
