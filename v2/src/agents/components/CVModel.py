@@ -20,12 +20,15 @@ class CVModel:
         for row in photo_data:
             result_row = []
             for cell in row:
+                
+                # Simulate ML CV Model
                 infected = 1 if cell == "infectada" else 0
                 confidence = round(random.uniform(0.6, 0.99), 4)
                 result_row.append({
                     "infected": infected,
                     "confidence": confidence
                 })
+                
             result_matrix.append(result_row)
 
         return result_matrix
@@ -57,7 +60,8 @@ class CVModel:
                 if (0 <= grid_x < self.model.grid.width) and (0 <= grid_y < self.model.grid.height):
                     if cell["infected"] == 1:
                         infected_dict[(grid_x, grid_y)] = cell["confidence"]  # ← Use tuple here
-
+                    else :
+                        infected_dict[(grid_x, grid_y)] = - cell["confidence"]
         return infected_dict
 
 
