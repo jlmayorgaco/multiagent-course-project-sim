@@ -1,0 +1,9 @@
+{
+    "width": 12,
+    "height": 12,
+    "densidad": 0.2,
+    "n_drones": 3,
+    "tasa_propagacion": 0.1,
+    "tasa_cura": 0.8,
+    "max_steps": 1000
+}
