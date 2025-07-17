@@ -279,7 +279,7 @@ class PalmerasModel(Model):
 
     def update_blackboard_palms_targets(self, position, confidence):
         current = self.blackboard["palms_targets"].get(position, 0.0)
-        self.blackboard["palms_targets"][position] = max(current, confidence)
+        self.blackboard["palms_targets"][position] = 0.5*current + 0.5*confidence
 
         for agent in self.schedule.agents:
             if isinstance(agent, GridCellAgent):
